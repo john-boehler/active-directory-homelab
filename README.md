@@ -229,3 +229,8 @@ active-directory-homelab/
 This lab was built with significant AI assistance for PowerShell scripting and architectural guidance. I designed the lab structure, made the design decisions (single-DC topology, AGDLP permissions model, OU layout, GPO scope choices), executed every step on the live system, and verified results at every stage. The PowerShell scripts in `/Scripts` reflect repeatable, idempotent patterns suitable for real infrastructure work — I can read them, explain them, and modify them, but I would not claim PowerShell expertise at this stage of my career.
 
 The primary learning outcome was conceptual: Active Directory architecture, Group Policy mechanics, the AGDLP authorization model, and structured troubleshooting methodology. This project is a portfolio of demonstrable skills, not a claim of mastery.
+
+---
+   
+   *John Boehler — CompTIA A+ certified, transitioning into IT.*  
+   *[LinkedIn](https://www.linkedin.com/in/john-boehler-/) · [Email](mailto:johnsboehler@outlook.com)*
