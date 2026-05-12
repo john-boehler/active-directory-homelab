@@ -28,7 +28,7 @@ The lab runs on VMware Workstation, with both VMs hosted on a single physical ma
 
 ## Project Goals
 
-Coming from a background in personal training and business development, I built this lab to translate the Active Directory knowledge from my CompTIA A+ certification into demonstrable, hands-on configuration. Active Directory is the foundation of enterprise identity, access management, and security, which is why I prioritized it as my first hands-on project as I transition into IT.
+Coming from a background in personal training and business development, I built this lab to translate the Active Directory knowledge from my CompTIA A+ certification into demonstrable, hands-on configuration. Active Directory is the foundation of enterprise identity, access management, and security, which is why I used it as my first hands-on project as I transition into IT.
 
 This project specifically demonstrates:
 
@@ -66,13 +66,13 @@ graph TD
     style Workstations fill:#424242,stroke:#212121,stroke-width:1px,color:#ffffff
 ```
 
-The USA OU anchors the hierarchy and allows future expansion to additional regions without restructuring. Below it, separate OUs for Users, Workstations, Servers, and Groups support targeted GPO scoping — a workstation security baseline can apply to the Workstations OU without affecting servers, and drive-mapping GPOs can target the Users OU without affecting computer accounts. The six department sub-OUs under Users enable per-department GPO targeting and lay groundwork for delegated administration (e.g., granting password-reset rights to a department lead without making them a Domain Admin). The `_Admin` OU is reserved for privileged accounts and admin groups — the leading underscore sorts it visually to the top, and the structural separation keeps high-privilege objects distinct from standard users, a recommended security-hardening pattern.
+The USA OU anchors the hierarchy and allows future expansion to additional regions without restructuring. Below it, separate OUs for Users, Workstations, Servers, and Groups support targeted GPO scoping — a workstation security baseline can apply to the Workstations OU without affecting servers, and drive-mapping GPOs can target the Users OU without affecting computer accounts. The six department sub-OUs under Users enable per-department GPO targeting and lay groundwork for delegated administration. The `_Admin` OU is reserved for privileged accounts and admin groups — the leading underscore sorts it visually to the top, and the structural separation keeps high-privilege objects distinct from standard users.
 
 ## Project Phases
 
 ### Phase 1 — Domain & DNS Setup
 
-Phase 1 promoted a fresh Windows Server 2025 install to a Domain Controller, established the `homelab.local` domain, and configured the DC to also host DNS and the File and Storage Services role — a deliberate consolidation for lab simplicity. The Windows 11 client (`Pluto`) was joined to the domain and authenticates against the DC for all logon and resource access. Validation used `Get-ADDomain` to confirm domain configuration and `dcdiag` to verify directory health.
+Phase 1 promoted a fresh Windows Server 2025 install to a Domain Controller, established the `homelab.local` domain, and configured the DC to also host DNS and the File and Storage Services role. The Windows 11 client (`Pluto`) was joined to the domain and authenticates against the DC for all logon and resource access. For validation, I used `Get-ADDomain` to confirm domain configuration and `dcdiag` to verify directory health.
 
 ![Server Manager dashboard showing AD DS, DNS, and File Storage roles installed on the DC](Screenshots/Phase1/phase1_03-server-manager-roles.png)
 *Server Manager confirming the three roles installed on the domain controller.*
@@ -82,16 +82,16 @@ Phase 1 promoted a fresh Windows Server 2025 install to a Domain Controller, est
 
 ### Phase 2 — OU Structure, Groups, and Bulk User Provisioning
 
-Phase 2 transformed the flat default AD into a structured environment. The OU hierarchy was built out with five sub-OUs under USA (`_Admin`, `Groups`, `Servers`, `Users`, `Workstations`), and six department sub-OUs under Users (Accounting, Executives, HR, IT, Marketing, Sales). Six Global Security groups — one per department — were created in the Groups OU to serve as the identity layer for AGDLP. The centerpiece was a PowerShell script that bulk-provisioned 50 explorer-themed users from a structured data source: it generated consistent usernames (first-initial + lastname), placed each user in the correct department OU, set a temporary password with `ChangePasswordAtLogon` enforced, and added them to their department security group. The script was idempotent — safe to re-run — and produced 49 created and 1 skipped (an existing user).
+Phase 2 transformed the default AD into a structured environment. The OU hierarchy was built out with five sub-OUs under USA (`_Admin`, `Groups`, `Servers`, `Users`, `Workstations`), and six department sub-OUs under Users ('Accounting', 'Executives', 'HR', 'IT', 'Marketing', 'Sales'). Six Global Security groups for each department were created in the Groups OU to serve as the identity layer for AGDLP. The centerpiece was a PowerShell script that bulk-created 50 explorer-themed users from a structured data source: it generated consistent usernames (first-initial + lastname), placed each user in the correct department OU, set a temporary password with `ChangePasswordAtLogon` enforced, and added them to their department security group. The script was idempotent and produced 49 created and 1 skipped (my all-time favorite explorer: Ernest Shackleton).
 
 ![ADUC showing the new OU structure](Screenshots/Phase2/phase2_01-ou-structure-after.png)
-*The redesigned OU hierarchy: top-level USA OU with sub-OUs separated by object type, plus department-specific sub-OUs under Users.*
+*   The redesigned OU hierarchy: top-level USA OU with sub-OUs separated by object type, plus department-specific sub-OUs under Users.*
 
 ![Bulk user creation script output](Screenshots/Phase2/phase2_05-script-execution.png)
 *PowerShell output from the bulk user creation script — 49 users created, 1 correctly skipped (idempotency check), 0 failed.*
 
 ![ADUC showing populated IT OU](Screenshots/Phase2/phase2_08-aduc-populated-ou.png)
-*The IT department OU populated with explorer-themed users after the script ran (Ernest Shackleton, Buzz Aldrin, Yuri Gagarin, etc.).*
+*   The IT department OU populated with explorer-themed users after the script ran (Ernest Shackleton, Buzz Aldrin, Yuri Gagarin, etc.).*
 
 ### Phase 3 — Group Policy
 
@@ -99,7 +99,7 @@ Phase 3 created four GPOs at three different scopes (domain, OU, and group via s
 
 The phase produced:
 
-- **`DOM_AllUsers_LoginBanner`** — domain-level interactive legal warning shown before login
+- **`DOM_AllUsers_LoginBanner`** — interactive legal warning shown before login
 - **`OU_Workstations_SecurityBaseline`** — three security settings applied to the Workstations OU: 10-minute machine inactivity lock, USB removable disk write-deny, and LLMNR disabled
 - **`OU_Users_DriveMappings`** — seven drive map items (six department-specific H: drives plus a Public P:), routed to the correct user via Item-Level Targeting on group membership
 - **`PSO_Standard_Users` / `PSO_Privileged_Users`** — Fine-Grained Password Policies with tiered precedence; Privileged (50) wins over Standard (100) for users in IT and Executives
@@ -107,20 +107,20 @@ The phase produced:
 Verification used `gpresult /h` to generate an HTML report tracing each applied setting back to its source GPO.
 
 ![Login banner on client](Screenshots/Phase3/phase3_04-login-banner-on-client.png)
-*Domain-wide login banner appearing on the client (`Pluto`) before the password prompt — proof of policy propagation from DC to client.*
+*Domain-wide login banner appearing on the client (`Pluto`) before the password prompt.*
 
 ![PSO enforcement demo](Screenshots/Phase3/phase3_07-pso-enforcement-demo.png)
 *PSO enforcement in action: the same 14-character password rejected for `eshackleton` (Privileged PSO, 16-character minimum) but accepted for `aketchum` (Standard PSO, 12-character minimum) — demonstrates tiered precedence working correctly.*
 
 ![ILT targeting editor](Screenshots/Phase3/phase3_12-ilt-targeting-editor.png)
-*Item-Level Targeting condition on the HR drive map: the H: drive mapping applies only to users who are members of `HOMELAB\HR`. The same GPO contains six similar items for the other departments, each with its own targeting condition.*
+*   Item-Level Targeting condition on the HR drive map: the H: drive mapping applies only to users who are members of `HOMELAB\HR`. The same GPO contains six similar items for the other departments, each with its own targeting condition.*
 
 ![gpresult HTML report](Screenshots/Phase3/phase3_19-gpresult-setting-trace.png)
 *`gpresult` HTML report tracing the login banner setting back to its source GPO (`DOM_AllUsers_LoginBanner`) — end-to-end verification that the policy applied as designed.*
 
 ### Phase 4 — File Server Permissions (AGDLP)
 
-An audit of existing NTFS permissions across the seven department subfolders revealed two real-world issues: the HR group had Modify access on every folder (inherited from the parent — a classic oversharing pattern), and three departments (Executives, Marketing, Sales) had no permissions on their own folders at all. Rather than patching individual ACLs, the entire access model was rebuilt using AGDLP — Accounts go into Global groups, Global groups are nested in Domain Local groups, and Domain Local groups receive permissions on the resource.
+An audit of existing NTFS permissions across the seven department subfolders revealed two issues: the HR group had Modify access on every folder (inherited from the parent), and three departments (Executives, Marketing, Sales) had no permissions on their own folders at all. Rather than patching individual ACLs, I rebuilt the entire access model using AGDLP — Accounts go into Global groups, Global groups are nested in Domain Local groups, and Domain Local groups receive permissions on the resource.
 
 ```mermaid
 graph LR
@@ -142,20 +142,20 @@ graph LR
 The implementation began with a teardown script that removed all `HOMELAB\*` ACEs and normalized inheritance to a clean baseline, leaving only infrastructure entries (Administrators, SYSTEM, CREATOR OWNER) on each subfolder. Seven Domain Local groups (`DL_Accounting_Modify`, `DL_HR_Modify`, etc.) were created with the appropriate Global group nested inside each, and these DL groups were applied directly to the NTFS ACLs with Modify rights and inheritance to subfolders and files. The parent `C:\CompanyData` received `Domain Users` with Read & Execute on the parent only (no inheritance) so users can navigate down to their department folder without gaining unintended access to others. Verification used two non-admin test users (`aketchum` from Accounting, `ramundsen` from Executives) — each could read and write to their own department folder, were denied access to other departments, and could access Public.
 
 ![Post-AGDLP ACL audit](Screenshots/Phase4/phase4_06b-post-agdlp-acl-audit.png)
-*Every subfolder now shows the same four-ACE pattern: three infrastructure entries (CREATOR OWNER, SYSTEM, BUILTIN\Administrators) and one DL_*_Modify group for department access. Predictable and consistent across the entire share.*
+*Every subfolder now shows the same four-ACE pattern: three infrastructure entries (CREATOR OWNER, SYSTEM, BUILTIN\Administrators) and one DL_x_Modify group for department access.*
 
 ![aketchum write success](Screenshots/Phase4/phase4_08-aketchum-accounting-write-success.png)
 *Test user `aketchum` (Accounting) successfully writes a file to H:\ — proves the AGDLP chain `aketchum` → `Accounting` → `DL_Accounting_Modify` → NTFS Modify works end-to-end for a non-admin user.*
 
 ![aketchum HR denied](Screenshots/Phase4/phase4_09-aketchum-hr-denied.png)
-*Same user blocked when navigating to a different department's folder via UNC path. Paired with the previous screenshot, this captures the access matrix in two images — works where it should, fails where it should.*
+*                     Same user blocked when navigating to a different department's folder via UNC path. The access matrix works where it should and fails where it should.*
 
 ![ramundsen write success](Screenshots/Phase4/phase4_12-ramundsen-executives-write-success.png)
-*Test user `ramundsen` (Executives) writes to her department folder — particularly significant because Executives had no permissions on its folder before the AGDLP rebuild. This screenshot represents a bug fix from the original audit, not just a configuration step.*
+*Test user `ramundsen` (Executives) writes to her department folder — significant because Executives had no permissions on its folder before the AGDLP rebuild. This screenshot represents a bug fix from the original audit, not just a configuration step.*
 
 ### Phase 5 — Troubleshooting Case Study
 
-Phase 5 documented a simulated helpdesk ticket: a user reported their H: drive was missing while P: still worked. Diagnosis used `whoami /groups`, `gpresult`, and ADUC to compare the user's session token against AD state. An interesting subtlety surfaced — the token still listed the old group membership even after sign-out, requiring a full reboot to clear cached credentials and confirm the diagnosis. Root cause traced through the AGDLP chain: the user had been removed from the `Executives` Global group, which broke `Executives → DL_Executives_Modify → NTFS Modify` and caused the drive map's Item-Level Targeting to skip the H: item. Resolution was a single ADUC change — re-adding the user to the group restored access on next login.
+Phase 5 documented a simulated helpdesk ticket: a user reported their H: drive was missing while P: still worked. For the diagnosis, I used `whoami /groups`, `gpresult`, and ADUC to compare the user's session token against AD state. Something interesting happened — the token still listed the old group membership even after sign-out, requiring a full reboot to clear cached credentials and confirm the diagnosis. The root cause traced through the AGDLP chain: the user had been removed from the `Executives` Global group, which broke `Executives → DL_Executives_Modify → NTFS Modify` and caused the drive map's Item-Level Targeting to skip the H: item. I resolved it with a single ADUC change — re-adding the user to the group restored access on next login.
 
 For the full diagnostic writeup, see [Case Study: H: Drive Missing After Login](Docs/case-study-h-drive-missing.md).
 
@@ -163,7 +163,7 @@ For the full diagnostic writeup, see [Case Study: H: Drive Missing After Login](
 *The reported symptom: File Explorer shows the P: drive (Public) and local C: drive, but the H: (Executives Department) drive is missing despite the user having had access previously.*
 
 ![Fix: H: drive restored](Screenshots/Phase5/phase5_07-h-drive-restored.png)
-*After re-adding the user to the Executives Global group and signing back in, both H: and P: are visible. End-to-end proof that the AGDLP chain was the root cause and the fix worked.*
+*After re-adding the user to the Executives Global group and signing back in, both H: and P: are visible. The AGDLP chain was the root cause and the fix worked.*
 
 ## Skills Demonstrated
 
