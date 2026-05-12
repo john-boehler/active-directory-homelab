@@ -85,13 +85,13 @@ Phase 1 promoted a fresh Windows Server 2025 install to a Domain Controller, est
 Phase 2 transformed the default AD into a structured environment. The OU hierarchy was built out with five sub-OUs under USA (`_Admin`, `Groups`, `Servers`, `Users`, `Workstations`), and six department sub-OUs under Users ('Accounting', 'Executives', 'HR', 'IT', 'Marketing', 'Sales'). Six Global Security groups for each department were created in the Groups OU to serve as the identity layer for AGDLP. The centerpiece was a PowerShell script that bulk-created 50 explorer-themed users from a structured data source: it generated consistent usernames (first-initial + lastname), placed each user in the correct department OU, set a temporary password with `ChangePasswordAtLogon` enforced, and added them to their department security group. The script was idempotent and produced 49 created and 1 skipped (my all-time favorite explorer: Ernest Shackleton).
 
 ![ADUC showing the new OU structure](Screenshots/Phase2/phase2_01-ou-structure-after.png)
-*   The redesigned OU hierarchy: top-level USA OU with sub-OUs separated by object type, plus department-specific sub-OUs under Users.*
+*The redesigned OU hierarchy: top-level USA OU with sub-OUs separated by object type, plus department-specific sub-OUs under Users.*
 
 ![Bulk user creation script output](Screenshots/Phase2/phase2_05-script-execution.png)
 *PowerShell output from the bulk user creation script — 49 users created, 1 correctly skipped (idempotency check), 0 failed.*
 
 ![ADUC showing populated IT OU](Screenshots/Phase2/phase2_08-aduc-populated-ou.png)
-*   The IT department OU populated with explorer-themed users after the script ran (Ernest Shackleton, Buzz Aldrin, Yuri Gagarin, etc.).*
+*The IT department OU populated with explorer-themed users after the script ran (Ernest Shackleton, Buzz Aldrin, Yuri Gagarin, etc.).*
 
 ### Phase 3 — Group Policy
 
@@ -113,7 +113,7 @@ Verification used `gpresult /h` to generate an HTML report tracing each applied 
 *PSO enforcement in action: the same 14-character password rejected for `eshackleton` (Privileged PSO, 16-character minimum) but accepted for `aketchum` (Standard PSO, 12-character minimum) — demonstrates tiered precedence working correctly.*
 
 ![ILT targeting editor](Screenshots/Phase3/phase3_12-ilt-targeting-editor.png)
-*   Item-Level Targeting condition on the HR drive map: the H: drive mapping applies only to users who are members of `HOMELAB\HR`. The same GPO contains six similar items for the other departments, each with its own targeting condition.*
+*Item-Level Targeting condition on the HR drive map: the H: drive mapping applies only to users who are members of `HOMELAB\HR`. The same GPO contains six similar items for the other departments, each with its own targeting condition.*
 
 ![gpresult HTML report](Screenshots/Phase3/phase3_19-gpresult-setting-trace.png)
 *`gpresult` HTML report tracing the login banner setting back to its source GPO (`DOM_AllUsers_LoginBanner`) — end-to-end verification that the policy applied as designed.*
@@ -148,7 +148,7 @@ The implementation began with a teardown script that removed all `HOMELAB\*` ACE
 *Test user `aketchum` (Accounting) successfully writes a file to H:\ — proves the AGDLP chain `aketchum` → `Accounting` → `DL_Accounting_Modify` → NTFS Modify works end-to-end for a non-admin user.*
 
 ![aketchum HR denied](Screenshots/Phase4/phase4_09-aketchum-hr-denied.png)
-*                     Same user blocked when navigating to a different department's folder via UNC path. The access matrix works where it should and fails where it should.*
+*Same user blocked when navigating to a different department's folder via UNC path. The access matrix works where it should and fails where it should.*
 
 ![ramundsen write success](Screenshots/Phase4/phase4_12-ramundsen-executives-write-success.png)
 *Test user `ramundsen` (Executives) writes to her department folder — significant because Executives had no permissions on its folder before the AGDLP rebuild. This screenshot represents a bug fix from the original audit, not just a configuration step.*
