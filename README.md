@@ -22,7 +22,7 @@ graph LR
 - **Domain:** `homelab.local`
 - **Hypervisor:** VMware Workstation
 
-## What this lab demonstrates
+## What This Lab Demonstrates
 
 These are the helpdesk-level skills I practiced while building this:
 
@@ -34,7 +34,7 @@ These are the helpdesk-level skills I practiced while building this:
 - Troubleshooting a real-world ticket where a user's mapped drive went missing
 - Using the tools a Tier 1 tech uses every day: ADUC, GPMC, Command Prompt (`gpresult`, `gpupdate`, `net use`, `whoami`)
 
-## Setting up the domain
+## Setting Up The Domain
 
 The first step was installing Windows Server 2025 and promoting it to a domain controller, which created the `homelab.local` domain. The same server also handles DNS (so client computers can find the domain) and hosts the file shares. In a real environment these would usually be separate servers, but combining them keeps the lab simple.
 
@@ -46,7 +46,7 @@ Once the domain was up, I joined the Windows 11 client (`Pluto`) to `homelab.loc
 ![Pluto's System properties showing it is joined to homelab.local](Screenshots/Phase1/phase1_07-client-system-properties.png)
 *The Windows 11 client successfully joined to the `homelab.local` domain.*
 
-## Organizing the directory
+## Organizing The Directory
 
 Active Directory uses Organizational Units (OUs) as folders for organizing users, computers, and groups. I set up a structure with a top-level USA OU containing sub-folders for different types of objects:
 
@@ -78,7 +78,7 @@ graph TD
 
 This separation matters because it lets Group Policy and permissions be applied to a specific set of objects without affecting others — for example, a policy targeting workstations doesn't accidentally hit a server.
 
-## Creating users and groups
+## Creating Users & Groups
 
 I created six security groups (one per department: Accounting, HR, IT, Marketing, Sales, Executives) and then around 50 user accounts, themed after famous explorers (Ernest Shackleton, Buzz Aldrin, etc., because it's more fun than test1/test2/test3).
 
@@ -116,29 +116,29 @@ To verify the policies were actually applying, I used `gpresult /h` on the clien
 ![gpresult HTML report](Screenshots/Phase3/phase3_19-gpresult-setting-trace.png)
 *The gpresult report showing which GPO is responsible for the login banner setting — useful for tracing where any setting came from.*
 
-## File share permissions
+## File Share Permissions
 
 I set up a shared folder (`C:\CompanyData`) on the server with subfolders for each department, plus a Public folder. The challenge is making sure each department can only access their own folder, while Public is open to everyone.
 
 I did this through NTFS permissions and security groups: each department's security group gets "Modify" permission on its own folder. When users log in, they automatically have access to their department's stuff through their group membership.
 
-When I first looked at the existing permissions on these folders, I found some real problems — HR had access to every folder (because of inherited permissions from the top folder), and three departments had no permissions on their own folders at all. So I cleaned things up by removing all the existing permissions and rebuilding them properly. This is the kind of "permissions audit" situation a helpdesk tech might walk into when someone reports they can or can't access something they shouldn't.
+When I first looked at the existing permissions on these folders, I found some real problems — HR had access to every folder (because of inherited permissions from the top folder), and three departments had no permissions on their own folders at all. So I cleaned things up by removing all the existing permissions and rebuilding them properly. 
 
 ![Clean ACL audit after rebuild](Screenshots/Phase4/phase4_06b-post-agdlp-acl-audit.png)
 *After cleanup, every department folder has the same clean permission pattern — only the right department group can modify their own files.*
 
 ![Aketchum write success](Screenshots/Phase4/phase4_08-aketchum-accounting-write-success.png)
-*User from Accounting successfully writing a file to her own department's H: drive.*
+*User from Accounting successfully writing a file to his own department's H: drive.*
 
 ![Aketchum HR denied](Screenshots/Phase4/phase4_09-aketchum-hr-denied.png)
-*Same user blocked when trying to access a different department's folder — proves the permissions are working.*
+*Same user blocked when trying to access a different department's folder — the permissions are working.*
 
 ![Ramundsen write success](Screenshots/Phase4/phase4_12-ramundsen-executives-write-success.png)
-*User from Executives writing to her department folder after the permissions were rebuilt.*
+*User from Executives writing to his department folder after the permissions were rebuilt.*
 
-## Troubleshooting case study
+## Troubleshooting Case Study
 
-The most helpdesk-relevant part of this lab was a simulated ticket I worked through start to finish: a user reported their mapped H: drive was missing after they logged in. I walked through it the way I'd handle a real ticket — confirmed the symptom, checked the user's group memberships, ran `gpresult` to see what policies had applied, traced the issue back to the actual cause, and documented the whole thing.
+The most helpdesk-relevant part of this lab was a simulated ticket I worked through start to finish: a user reported their mapped H: drive was missing after they logged in. I walked through it like this — confirmed the symptom, checked the user's group memberships, ran `gpresult` to see what policies had applied, traced the issue back to the actual cause, and documented the whole thing.
 
 Short version: the user had been accidentally removed from their department's security group, which is why the drive map didn't apply. Added them back, had them sign in fresh, and the drive came back.
 
@@ -185,10 +185,11 @@ active-directory-homelab/
 
 ## A note on AI assistance
 
-This lab was built with significant help from an AI assistant, especially for the PowerShell scripting and walking through unfamiliar parts of Group Policy and NTFS permissions. I made the decisions about how to set things up, ran every step on the live system, and verified the results. The PowerShell scripts in `/Scripts` I can read and explain at a basic level, but I wouldn't call myself a PowerShell expert — it's a tool I'm learning to use.
+This lab was built with significant AI assistance for PowerShell scripting and architectural guidance. I made the decisions about how to set things up, ran every step on the live system, and verified the results. The PowerShell scripts in `/Scripts` are repeatable and idempotent patterns — I can read them, explain them, and modify them, but I would not claim PowerShell expertise at this stage of my career.
 
 The main thing I wanted to get out of this project was hands-on practice with the tools and tasks a Tier 1 helpdesk tech actually does day-to-day: ADUC, Group Policy, basic permissions, and Windows troubleshooting. The point isn't to claim mastery — it's to show I've done the work, can explain what I did, and can use these tools when a ticket lands on my desk.
 
 ---
 
-*John Boehler — CompTIA A+ certified, looking for Tier 1 / helpdesk / desktop support roles.*
+   *John Boehler — CompTIA A+ certified, transitioning into IT.*  
+   *[LinkedIn](https://www.linkedin.com/in/john-boehler-/) · [Email](mailto:johnsboehler@outlook.com)*
