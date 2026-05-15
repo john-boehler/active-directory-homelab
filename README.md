@@ -206,5 +206,7 @@ The main thing I wanted to get out of this project was hands-on practice with th
 
 ---
 
+See my [osTicket Helpdesk Lab](https://github.com/john-boehler/osticket-helpdesk-lab) - a working helpdesk integrated with this AD Environment
+
    *John Boehler — CompTIA A+ certified, transitioning into IT.*  
    *[LinkedIn](https://www.linkedin.com/in/john-boehler-/) · [Email](mailto:johnsboehler@outlook.com)*
