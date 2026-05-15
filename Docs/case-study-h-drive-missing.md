@@ -3,7 +3,7 @@
 ## The Ticket
 A user (Roald Amundsen, Executives department) reported that his H: drive was missing after he signed in. The P: drive (the shared Public drive) was still showing up normally. He'd already tried restarting, but that didn't help.
 
-## Initial thinking
+## Initial Thinking
 The H: drive comes from a Group Policy that maps it based on the user's department group. So if H: is missing but P: is working, possible causes:
 
 - The Group Policy that maps H: didn't apply
@@ -72,7 +72,7 @@ The user had been removed from the Executives security group at some point after
 - `gpresult` is one of the most useful troubleshooting tools for figuring out why a policy did or didn't apply. It tells you exactly what happened.
 - When something works for some users but not others, the difference is almost always either group membership or permissions. That's the first place to check.
 
-## Tools I used
+## Tools I Used
 
 - **ADUC** — to check the user's group memberships in the directory
 - **Command Prompt** — `net use`, `whoami /groups`, `gpresult /r /scope:user`
