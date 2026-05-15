@@ -1,6 +1,6 @@
 # Case Study: User Reports H: Drive Missing After Login
 
-## The ticket
+## The Ticket
 A user (Roald Amundsen, Executives department) reported that his H: drive was missing after he signed in. The P: drive (the shared Public drive) was still showing up normally. He'd already tried restarting, but that didn't help.
 
 ## Initial thinking
@@ -11,9 +11,9 @@ The H: drive comes from a Group Policy that maps it based on the user's departme
 - The file server might not be reachable
 - Permissions on the folder might be broken
 
-I had a hunch it was a group membership issue — that's the most common cause of "one specific thing isn't working" tickets — but I wanted to verify rather than assume.
+I had a hunch it was a group membership issue, but I wanted to verify rather than assume.
 
-## How I diagnosed it
+## How I Diagnosed It
 
 ### Step 1: Confirm the problem on the client
 
@@ -47,28 +47,28 @@ This shows which GPOs got applied during the user's login. The drive mappings GP
 
 On the server, I opened ADUC, looked up Roald, and checked his group memberships from the directory side. He was NOT in the Executives group. So the user's logged-in session was showing one thing, but the actual current state in AD said something different.
 
-This was the clue I needed: the user's group memberships when they logged in were different from what's in AD right now. Something had been changed AFTER they logged in.
+The user's group memberships when they logged in were different from what's in AD right now. Something had been changed AFTER they logged in.
 
 ### Step 5: Confirm the caching behavior
 
 When a user logs in, Windows grabs a snapshot of their group memberships and uses that snapshot for the whole session. If their groups change while they're logged in, the session doesn't automatically pick up the change. Even signing out and back in didn't fully clear it for this user — I had to do a full reboot to force a completely fresh login and verify the cached info was gone.
 
-## What was actually wrong
+## What Was Actually Wrong
 
 The user had been removed from the Executives security group at some point after his last login. The Group Policy that maps the H: drive checks "is this user in Executives?" — when the answer became "no," the H: drive simply didn't get mapped. There's no error message; the drive just doesn't show up. P: still worked because it's mapped for everyone, not based on group membership.
 
-## How I fixed it
+## How I Fixed It
 
 1. Added the user back to the Executives security group in ADUC
-2. Had the user sign out and sign back in to refresh their session
+2. Had the user sign out and sign back in to refresh their session, then do a full reboot
 3. H: drive came back automatically
 4. Verified by having the user open a file in the H: drive and save a change
 
-## What I learned
+## What I Learned
 
 - A user's "groups during their current session" can be different from "groups in AD right now." The session is a snapshot from when they logged in.
 - Group Policy that depends on group membership only re-checks at login — that's why a fresh login is often the fix.
-- "Have you tried restarting?" isn't just a meme — restarting forces a clean login, which clears cached membership info and forces a fresh check against the server. It's a legitimate diagnostic step.
+- "Have you tried restarting?" isn't just a meme. Restarting forces a clean login, which clears cached membership info and forces a fresh check against the server. It's a legitimate diagnostic step.
 - `gpresult` is one of the most useful troubleshooting tools for figuring out why a policy did or didn't apply. It tells you exactly what happened.
 - When something works for some users but not others, the difference is almost always either group membership or permissions. That's the first place to check.
 
