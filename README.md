@@ -41,9 +41,11 @@ The first step was installing Windows Server 2025 and promoting it to a domain c
 Once the domain was up, I joined the Windows 11 client (`Pluto`) to `homelab.local`. After that, anyone logging into Pluto with a domain account is authenticating against the server rather than the local machine. I verified everything was healthy by running `dcdiag` on the server and signing in as a domain user from the client.
 
 ![Server Manager dashboard showing AD DS, DNS, and File Storage roles installed on the DC](Screenshots/Phase1/phase1_03-server-manager-roles.png)
+
 *Server Manager showing the three roles installed: Active Directory, DNS, and File Server.*
 
 ![Pluto's System properties showing it is joined to homelab.local](Screenshots/Phase1/phase1_07-client-system-properties.png)
+
 *The Windows 11 client successfully joined to the `homelab.local` domain.*
 
 ## Organizing The Directory
@@ -85,12 +87,15 @@ I created six security groups (one per department: Accounting, HR, IT, Marketing
 Rather than clicking through ADUC 50 times, I used a PowerShell script to create all the users at once. The script goes down a list, creates each user, places them in the right department OU, sets a temporary password, and adds them to their department's security group. This is the kind of thing a helpdesk tech might run when onboarding a batch of new hires.
 
 ![ADUC showing the OU structure](Screenshots/Phase2/phase2_01-ou-structure-after.png)
+
 *The directory organized into OUs by purpose, with department folders under Users.*
 
 ![PowerShell script output](Screenshots/Phase2/phase2_05-script-execution.png)
+
 *Output from the bulk user creation script — 49 created, 1 skipped because that user already existed.*
 
 ![Populated IT OU](Screenshots/Phase2/phase2_08-aduc-populated-ou.png)
+
 *The IT department OU after the script ran, populated with user accounts.*
 
 ## Group Policy
@@ -105,15 +110,19 @@ Group Policy is how Windows centrally applies settings across all the computers 
 To verify the policies were actually applying, I used `gpresult /h` on the client to generate a report showing exactly which GPOs got applied and where each setting came from.
 
 ![Login banner on client](Screenshots/Phase3/phase3_04-login-banner-on-client.png)
+
 *The login banner appearing on the client before sign-in — applied via Group Policy domain-wide.*
 
 ![Password requirements in action](Screenshots/Phase3/phase3_07-pso-enforcement-demo.png)
+
 *Password requirements being enforced — a short password gets rejected for a privileged account but accepted for a regular user account.*
 
 ![Drive mapping configuration](Screenshots/Phase3/phase3_12-ilt-targeting-editor.png)
+
 *Configuration for the HR drive mapping — set to apply only to users in the HR security group.*
 
 ![gpresult HTML report](Screenshots/Phase3/phase3_19-gpresult-setting-trace.png)
+
 *The gpresult report showing which GPO is responsible for the login banner setting — useful for tracing where any setting came from.*
 
 ## File Share Permissions
@@ -125,15 +134,19 @@ I did this through NTFS permissions and security groups: each department's secur
 When I first looked at the existing permissions on these folders, I found some real problems — HR had access to every folder (because of inherited permissions from the top folder), and three departments had no permissions on their own folders at all. So I cleaned things up by removing all the existing permissions and rebuilding them properly. 
 
 ![Clean ACL audit after rebuild](Screenshots/Phase4/phase4_06b-post-agdlp-acl-audit.png)
+
 *After cleanup, every department folder has the same clean permission pattern — only the right department group can modify their own files.*
 
 ![Aketchum write success](Screenshots/Phase4/phase4_08-aketchum-accounting-write-success.png)
+
 *User from Accounting successfully writing a file to his own department's H: drive.*
 
 ![Aketchum HR denied](Screenshots/Phase4/phase4_09-aketchum-hr-denied.png)
+
 *Same user blocked when trying to access a different department's folder — the permissions are working.*
 
 ![Ramundsen write success](Screenshots/Phase4/phase4_12-ramundsen-executives-write-success.png)
+
 *User from Executives writing to his department folder after the permissions were rebuilt.*
 
 ## Troubleshooting Case Study
@@ -145,9 +158,11 @@ Short version: the user had been accidentally removed from their department's se
 For the full step-by-step writeup, see [Case Study: H: Drive Missing After Login](Docs/case-study-h-drive-missing.md).
 
 ![Symptom: H: drive missing](Screenshots/Phase5/phase5_02-symptom-h-drive-missing.png)
+
 *The reported problem: only the Public (P:) drive shows up. The user's department H: drive is missing.*
 
 ![Fix: H: drive restored](Screenshots/Phase5/phase5_07-h-drive-restored.png)
+
 *After re-adding the user to the right group and logging back in, both drives appear correctly.*
 
 ## Tools used
