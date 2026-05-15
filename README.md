@@ -1,44 +1,54 @@
-# Active Directory Home Lab — Domain Setup, AGDLP, Group Policy, and Troubleshooting
+# Active Directory Home Lab
 
-This project is an Active Directory home lab built from scratch in VMware, with Windows Server 2025 on the domain controller and Windows 11 Pro on the client. The setup is a single-domain environment (`homelab.local`) with a department-based Organizational Unit structure containing roughly 50 users across six departments — Accounting, Executives, HR, IT, Marketing, and Sales. I configured multiple Group Policy Objects covering a login banner, fine-grained password policies, drive mappings via item-level targeting, and a workstation security baseline, and implemented AGDLP-based file server permissions for principle-of-least-privilege access control. The project closes with a documented troubleshooting case study that walks through diagnosis and resolution of a realistic helpdesk ticket.
+I built this lab to practice the kinds of tasks I'd actually be doing on a helpdesk: managing user accounts, troubleshooting login issues, dealing with mapped drives, fixing permissions problems on shared folders, and using the basic tools (ADUC, Group Policy, Command Prompt) that show up in most Windows IT environments. It's a Windows Server 2025 machine running as a domain controller, with a Windows 11 client joined to the domain, both running in VMware on my laptop.
 
-## Architecture
+## Lab Environment
 
 ```mermaid
 graph LR
-    DC["FileServer01<br/>DC + DNS + File Server<br/>192.168.253.129"]
-    Client["Pluto<br/>Workstation - Windows 11<br/>192.168.253.130"]
+    DC["FileServer01<br/>Windows Server 2025<br/>192.168.253.129"]
+    Client["Pluto<br/>Windows 11<br/>192.168.253.130"]
     DC <--> Client
     
     style DC fill:#1565c0,stroke:#0d47a1,stroke-width:2px,color:#ffffff
     style Client fill:#2e7d32,stroke:#1b5e20,stroke-width:2px,color:#ffffff
 ```
 
-The lab runs on VMware Workstation, with both VMs hosted on a single physical machine. The Domain Controller (`FileServer01`) also serves as the file server in this setup — in production these would typically be separate hosts, but consolidating them keeps the lab focused on Active Directory itself rather than infrastructure plumbing. The Windows 11 client (`Pluto`) is joined to the `homelab.local` domain and authenticates against the DC for logon and file access.
-
-### Lab Environment
-
-| Component | Hostname | IP Address | OS | Roles |
-|-----------|----------|------------|----|-------|
-| Domain Controller | `FileServer01` | 192.168.253.129 | Windows Server 2025 | AD DS, DNS, File Server |
-| Workstation | `Pluto` | 192.168.253.130 | Windows 11 Pro | Domain-joined client |
+| Component | Hostname | IP Address | OS | Role |
+|-----------|----------|------------|----|------|
+| Server | `FileServer01` | 192.168.253.129 | Windows Server 2025 | Domain Controller, DNS, File Server |
+| Client | `Pluto` | 192.168.253.130 | Windows 11 Pro | Domain-joined workstation |
 
 - **Domain:** `homelab.local`
 - **Hypervisor:** VMware Workstation
 
-## Project Goals
+## What this lab demonstrates
 
-Coming from a background in personal training and business development, I built this lab to translate the Active Directory knowledge from my CompTIA A+ certification into demonstrable, hands-on configuration. Active Directory is the foundation of enterprise identity, access management, and security, which is why I used it as my first hands-on project as I transition into IT.
+These are the helpdesk-level skills I practiced while building this:
 
-This project specifically demonstrates:
+- Setting up a Windows domain and joining a client computer to it
+- Creating, organizing, and managing user accounts in Active Directory
+- Working with security groups and Organizational Units (OUs)
+- Configuring basic Group Policy settings (login banner, password requirements, mapped drives)
+- Setting up NTFS permissions so each department can only access their own files
+- Troubleshooting a real-world ticket where a user's mapped drive went missing
+- Using the tools a Tier 1 tech uses every day: ADUC, GPMC, Command Prompt (`gpresult`, `gpupdate`, `net use`, `whoami`)
 
-- **Active Directory design** — OU structure, Global and Domain Local security groups, and bulk user provisioning across six departments (~50 users)
-- **Group Policy mechanics** — domain-level and OU-scoped GPOs, Item-Level Targeting on drive maps, and Fine-Grained Password Policies with tiered precedence
-- **File server access control** — AGDLP-based NTFS permissions with explicit inheritance flags and principle-of-least-privilege scoping
-- **PowerShell automation** — idempotent scripts for OU creation, group provisioning, bulk user creation, and ACL management
-- **Troubleshooting methodology** — documented case study tracing a user-reported issue through diagnostic tools (`gpresult`, ADUC, Event Viewer, Kerberos cache analysis) to root cause and resolution
+## Setting up the domain
 
-## AD Logical Structure
+The first step was installing Windows Server 2025 and promoting it to a domain controller, which created the `homelab.local` domain. The same server also handles DNS (so client computers can find the domain) and hosts the file shares. In a real environment these would usually be separate servers, but combining them keeps the lab simple.
+
+Once the domain was up, I joined the Windows 11 client (`Pluto`) to `homelab.local`. After that, anyone logging into Pluto with a domain account is authenticating against the server rather than the local machine. I verified everything was healthy by running `dcdiag` on the server and signing in as a domain user from the client.
+
+![Server Manager dashboard showing AD DS, DNS, and File Storage roles installed on the DC](Screenshots/Phase1/phase1_03-server-manager-roles.png)
+*Server Manager showing the three roles installed: Active Directory, DNS, and File Server.*
+
+![Pluto's System properties showing it is joined to homelab.local](Screenshots/Phase1/phase1_07-client-system-properties.png)
+*The Windows 11 client successfully joined to the `homelab.local` domain.*
+
+## Organizing the directory
+
+Active Directory uses Organizational Units (OUs) as folders for organizing users, computers, and groups. I set up a structure with a top-level USA OU containing sub-folders for different types of objects:
 
 ```mermaid
 graph TD
@@ -66,137 +76,87 @@ graph TD
     style Workstations fill:#424242,stroke:#212121,stroke-width:1px,color:#ffffff
 ```
 
-The USA OU anchors the hierarchy and allows future expansion to additional regions without restructuring. Below it, separate OUs for Users, Workstations, Servers, and Groups support targeted GPO scoping — a workstation security baseline can apply to the Workstations OU without affecting servers, and drive-mapping GPOs can target the Users OU without affecting computer accounts. The six department sub-OUs under Users enable per-department GPO targeting and lay groundwork for delegated administration. The `_Admin` OU is reserved for privileged accounts and admin groups — the leading underscore sorts it visually to the top, and the structural separation keeps high-privilege objects distinct from standard users.
+This separation matters because it lets Group Policy and permissions be applied to a specific set of objects without affecting others — for example, a policy targeting workstations doesn't accidentally hit a server.
 
-## Project Phases
+## Creating users and groups
 
-### Phase 1 — Domain & DNS Setup
+I created six security groups (one per department: Accounting, HR, IT, Marketing, Sales, Executives) and then around 50 user accounts, themed after famous explorers (Ernest Shackleton, Buzz Aldrin, etc., because it's more fun than test1/test2/test3).
 
-Phase 1 promoted a fresh Windows Server 2025 install to a Domain Controller, established the `homelab.local` domain, and configured the DC to also host DNS and the File and Storage Services role. The Windows 11 client (`Pluto`) was joined to the domain and authenticates against the DC for all logon and resource access. For validation, I used `Get-ADDomain` to confirm domain configuration and `dcdiag` to verify directory health.
+Rather than clicking through ADUC 50 times, I used a PowerShell script to create all the users at once. The script goes down a list, creates each user, places them in the right department OU, sets a temporary password, and adds them to their department's security group. This is the kind of thing a helpdesk tech might run when onboarding a batch of new hires.
 
-![Server Manager dashboard showing AD DS, DNS, and File Storage roles installed on the DC](Screenshots/Phase1/phase1_03-server-manager-roles.png)
-*Server Manager confirming the three roles installed on the domain controller.*
+![ADUC showing the OU structure](Screenshots/Phase2/phase2_01-ou-structure-after.png)
+*The directory organized into OUs by purpose, with department folders under Users.*
 
-![Pluto's System properties showing it is joined to homelab.local](Screenshots/Phase1/phase1_07-client-system-properties.png)
-*Client (`Pluto`) joined to `homelab.local` and authenticating as a domain user.*
+![PowerShell script output](Screenshots/Phase2/phase2_05-script-execution.png)
+*Output from the bulk user creation script — 49 created, 1 skipped because that user already existed.*
 
-### Phase 2 — OU Structure, Groups, and Bulk User Provisioning
+![Populated IT OU](Screenshots/Phase2/phase2_08-aduc-populated-ou.png)
+*The IT department OU after the script ran, populated with user accounts.*
 
-Phase 2 transformed the default AD into a structured environment. The OU hierarchy was built out with five sub-OUs under USA (`_Admin`, `Groups`, `Servers`, `Users`, `Workstations`), and six department sub-OUs under Users ('Accounting', 'Executives', 'HR', 'IT', 'Marketing', 'Sales'). Six Global Security groups for each department were created in the Groups OU to serve as the identity layer for AGDLP. The centerpiece was a PowerShell script that bulk-created 50 explorer-themed users from a structured data source: it generated consistent usernames (first-initial + lastname), placed each user in the correct department OU, set a temporary password with `ChangePasswordAtLogon` enforced, and added them to their department security group. The script was idempotent and produced 49 created and 1 skipped (my all-time favorite explorer: Ernest Shackleton).
+## Group Policy
 
-![ADUC showing the new OU structure](Screenshots/Phase2/phase2_01-ou-structure-after.png)
-*The redesigned OU hierarchy: top-level USA OU with sub-OUs separated by object type, plus department-specific sub-OUs under Users.*
+Group Policy is how Windows centrally applies settings across all the computers and users in a domain. Once you set up a Group Policy Object (GPO), it pushes settings out to whoever it targets. I configured several common ones a Tier 1 tech is likely to see in the field:
 
-![Bulk user creation script output](Screenshots/Phase2/phase2_05-script-execution.png)
-*PowerShell output from the bulk user creation script — 49 users created, 1 correctly skipped (idempotency check), 0 failed.*
+- **Login banner** — a warning message that pops up before users can sign in (common in workplaces for legal/security reasons)
+- **Password requirements** — minimum password length and complexity rules
+- **Mapped drives** — when a user logs in, they automatically get their department's shared folder mapped as the H: drive, plus a Public folder mapped as P:
+- **Workstation security baseline** — screen locks after 10 minutes of inactivity, USB drives are read-only
 
-![ADUC showing populated IT OU](Screenshots/Phase2/phase2_08-aduc-populated-ou.png)
-*The IT department OU populated with explorer-themed users after the script ran (Ernest Shackleton, Buzz Aldrin, Yuri Gagarin, etc.).*
-
-### Phase 3 — Group Policy
-
-Phase 3 created four GPOs at three different scopes (domain, OU, and group via security filtering) plus two Fine-Grained Password Policies, then verified the entire stack with `gpresult`.
-
-The phase produced:
-
-- **`DOM_AllUsers_LoginBanner`** — interactive legal warning shown before login
-- **`OU_Workstations_SecurityBaseline`** — three security settings applied to the Workstations OU: 10-minute machine inactivity lock, USB removable disk write-deny, and LLMNR disabled
-- **`OU_Users_DriveMappings`** — seven drive map items (six department-specific H: drives plus a Public P:), routed to the correct user via Item-Level Targeting on group membership
-- **`PSO_Standard_Users` / `PSO_Privileged_Users`** — Fine-Grained Password Policies with tiered precedence; Privileged (50) wins over Standard (100) for users in IT and Executives
-
-Verification used `gpresult /h` to generate an HTML report tracing each applied setting back to its source GPO.
+To verify the policies were actually applying, I used `gpresult /h` on the client to generate a report showing exactly which GPOs got applied and where each setting came from.
 
 ![Login banner on client](Screenshots/Phase3/phase3_04-login-banner-on-client.png)
-*Domain-wide login banner appearing on the client (`Pluto`) before the password prompt.*
+*The login banner appearing on the client before sign-in — applied via Group Policy domain-wide.*
 
-![PSO enforcement demo](Screenshots/Phase3/phase3_07-pso-enforcement-demo.png)
-*PSO enforcement in action: the same 14-character password rejected for `eshackleton` (Privileged PSO, 16-character minimum) but accepted for `aketchum` (Standard PSO, 12-character minimum) — demonstrates tiered precedence working correctly.*
+![Password requirements in action](Screenshots/Phase3/phase3_07-pso-enforcement-demo.png)
+*Password requirements being enforced — a short password gets rejected for a privileged account but accepted for a regular user account.*
 
-![ILT targeting editor](Screenshots/Phase3/phase3_12-ilt-targeting-editor.png)
-*Item-Level Targeting condition on the HR drive map: the H: drive mapping applies only to users who are members of `HOMELAB\HR`. The same GPO contains six similar items for the other departments, each with its own targeting condition.*
+![Drive mapping configuration](Screenshots/Phase3/phase3_12-ilt-targeting-editor.png)
+*Configuration for the HR drive mapping — set to apply only to users in the HR security group.*
 
 ![gpresult HTML report](Screenshots/Phase3/phase3_19-gpresult-setting-trace.png)
-*`gpresult` HTML report tracing the login banner setting back to its source GPO (`DOM_AllUsers_LoginBanner`) — end-to-end verification that the policy applied as designed.*
+*The gpresult report showing which GPO is responsible for the login banner setting — useful for tracing where any setting came from.*
 
-### Phase 4 — File Server Permissions (AGDLP)
+## File share permissions
 
-An audit of existing NTFS permissions across the seven department subfolders revealed two issues: the HR group had Modify access on every folder (inherited from the parent), and three departments (Executives, Marketing, Sales) had no permissions on their own folders at all. Rather than patching individual ACLs, I rebuilt the entire access model using AGDLP — Accounts go into Global groups, Global groups are nested in Domain Local groups, and Domain Local groups receive permissions on the resource.
+I set up a shared folder (`C:\CompanyData`) on the server with subfolders for each department, plus a Public folder. The challenge is making sure each department can only access their own folder, while Public is open to everyone.
 
-```mermaid
-graph LR
-    User["User Account<br/>(e.g. eshackleton)"]
-    Global["Global Group<br/>IT"]
-    DL["Domain Local Group<br/>DL_IT_Modify"]
-    Folder["NTFS Permission<br/>Modify on C:\CompanyData\IT"]
-    
-    User -->|member of| Global
-    Global -->|nested in| DL
-    DL -->|granted on| Folder
-    
-    style User fill:#ad1457,stroke:#880e4f,stroke-width:2px,color:#ffffff
-    style Global fill:#1565c0,stroke:#0d47a1,stroke-width:2px,color:#ffffff
-    style DL fill:#e65100,stroke:#bf360c,stroke-width:2px,color:#ffffff
-    style Folder fill:#6a1b9a,stroke:#4a148c,stroke-width:2px,color:#ffffff
-```
+I did this through NTFS permissions and security groups: each department's security group gets "Modify" permission on its own folder. When users log in, they automatically have access to their department's stuff through their group membership.
 
-The implementation began with a teardown script that removed all `HOMELAB\*` ACEs and normalized inheritance to a clean baseline, leaving only infrastructure entries (Administrators, SYSTEM, CREATOR OWNER) on each subfolder. Seven Domain Local groups (`DL_Accounting_Modify`, `DL_HR_Modify`, etc.) were created with the appropriate Global group nested inside each, and these DL groups were applied directly to the NTFS ACLs with Modify rights and inheritance to subfolders and files. The parent `C:\CompanyData` received `Domain Users` with Read & Execute on the parent only (no inheritance) so users can navigate down to their department folder without gaining unintended access to others. Verification used two non-admin test users (`aketchum` from Accounting, `ramundsen` from Executives) — each could read and write to their own department folder, were denied access to other departments, and could access Public.
+When I first looked at the existing permissions on these folders, I found some real problems — HR had access to every folder (because of inherited permissions from the top folder), and three departments had no permissions on their own folders at all. So I cleaned things up by removing all the existing permissions and rebuilding them properly. This is the kind of "permissions audit" situation a helpdesk tech might walk into when someone reports they can or can't access something they shouldn't.
 
-![Post-AGDLP ACL audit](Screenshots/Phase4/phase4_06b-post-agdlp-acl-audit.png)
-*Every subfolder now shows the same four-ACE pattern: three infrastructure entries (CREATOR OWNER, SYSTEM, BUILTIN\Administrators) and one DL_x_Modify group for department access.*
+![Clean ACL audit after rebuild](Screenshots/Phase4/phase4_06b-post-agdlp-acl-audit.png)
+*After cleanup, every department folder has the same clean permission pattern — only the right department group can modify their own files.*
 
-![aketchum write success](Screenshots/Phase4/phase4_08-aketchum-accounting-write-success.png)
-*Test user `aketchum` (Accounting) successfully writes a file to H:\ — proves the AGDLP chain `aketchum` → `Accounting` → `DL_Accounting_Modify` → NTFS Modify works end-to-end for a non-admin user.*
+![Aketchum write success](Screenshots/Phase4/phase4_08-aketchum-accounting-write-success.png)
+*User from Accounting successfully writing a file to her own department's H: drive.*
 
-![aketchum HR denied](Screenshots/Phase4/phase4_09-aketchum-hr-denied.png)
-*Same user blocked when navigating to a different department's folder via UNC path. The access matrix works where it should and fails where it should.*
+![Aketchum HR denied](Screenshots/Phase4/phase4_09-aketchum-hr-denied.png)
+*Same user blocked when trying to access a different department's folder — proves the permissions are working.*
 
-![ramundsen write success](Screenshots/Phase4/phase4_12-ramundsen-executives-write-success.png)
-*Test user `ramundsen` (Executives) writes to her department folder — significant because Executives had no permissions on its folder before the AGDLP rebuild. This screenshot represents a bug fix from the original audit, not just a configuration step.*
+![Ramundsen write success](Screenshots/Phase4/phase4_12-ramundsen-executives-write-success.png)
+*User from Executives writing to her department folder after the permissions were rebuilt.*
 
-### Phase 5 — Troubleshooting Case Study
+## Troubleshooting case study
 
-Phase 5 documented a simulated helpdesk ticket: a user reported their H: drive was missing while P: still worked. For the diagnosis, I used `whoami /groups`, `gpresult`, and ADUC to compare the user's session token against AD state. Something interesting happened — the token still listed the old group membership even after sign-out, requiring a full reboot to clear cached credentials and confirm the diagnosis. The root cause traced through the AGDLP chain: the user had been removed from the `Executives` Global group, which broke `Executives → DL_Executives_Modify → NTFS Modify` and caused the drive map's Item-Level Targeting to skip the H: item. I resolved it with a single ADUC change — re-adding the user to the group restored access on next login.
+The most helpdesk-relevant part of this lab was a simulated ticket I worked through start to finish: a user reported their mapped H: drive was missing after they logged in. I walked through it the way I'd handle a real ticket — confirmed the symptom, checked the user's group memberships, ran `gpresult` to see what policies had applied, traced the issue back to the actual cause, and documented the whole thing.
 
-For the full diagnostic writeup, see [Case Study: H: Drive Missing After Login](Docs/case-study-h-drive-missing.md).
+Short version: the user had been accidentally removed from their department's security group, which is why the drive map didn't apply. Added them back, had them sign in fresh, and the drive came back.
+
+For the full step-by-step writeup, see [Case Study: H: Drive Missing After Login](Docs/case-study-h-drive-missing.md).
 
 ![Symptom: H: drive missing](Screenshots/Phase5/phase5_02-symptom-h-drive-missing.png)
-*The reported symptom: File Explorer shows the P: drive (Public) and local C: drive, but the H: (Executives Department) drive is missing despite the user having had access previously.*
+*The reported problem: only the Public (P:) drive shows up. The user's department H: drive is missing.*
 
 ![Fix: H: drive restored](Screenshots/Phase5/phase5_07-h-drive-restored.png)
-*After re-adding the user to the Executives Global group and signing back in, both H: and P: are visible. The AGDLP chain was the root cause and the fix worked.*
+*After re-adding the user to the right group and logging back in, both drives appear correctly.*
 
-## Skills Demonstrated
+## Tools used
 
-### Active Directory
-- Domain controller deployment with AD DS and integrated DNS
-- OU hierarchy design with object-type and departmental separation
-- Global and Domain Local security group strategy
-- Bulk user provisioning via PowerShell automation (~50 users across 6 departments)
-
-### Group Policy
-- GPO design and scoping at domain, OU, and group levels
-- Group Policy Preferences with Item-Level Targeting
-- Fine-Grained Password Policies with tiered precedence
-- Workstation security baseline (inactivity lock, removable storage, LLMNR)
-- gpresult-based verification and HTML reporting
-
-### File Server & Access Control
-- AGDLP-based NTFS permissions model
-- Domain Local groups for resource-tier access control
-- NTFS inheritance flags (ContainerInherit, ObjectInherit)
-- Principle of least privilege applied through narrow permission scoping
-
-### PowerShell Automation
-- Active Directory cmdlets (Get/New/Set/Add-ADUser, ADGroup, ADOrganizationalUnit)
-- ACL manipulation (Get-Acl, Set-Acl, .NET FileSystemAccessRule)
-- Idempotent script design with try/catch and existence checks
-- Pipeline filtering with Where-Object
-
-### Troubleshooting Methodology
-- Diagnostic toolchain (gpresult, dcdiag, whoami /groups, ADUC, Event Viewer)
-- Hypothesis-driven investigation: symptom → diagnosis → root cause → fix
-- Kerberos token and credential cache analysis
-- Incident documentation in formal case-study format
+- **Active Directory Users and Computers (ADUC)** — main tool for managing users, groups, and OUs
+- **Group Policy Management Console (GPMC)** — for creating and editing GPOs
+- **PowerShell** — for bulk user creation and some other automation
+- **Command Prompt utilities** — `net use`, `whoami`, `gpresult`, `gpupdate`, `nslookup`, `dcdiag`
+- **VMware Workstation** — for running the virtual machines
 
 ## Project Structure
 
@@ -206,14 +166,13 @@ active-directory-homelab/
 ├── Docs/
 │   ├── case-study-h-drive-missing.md
 │   └── diagrams.md
-├── Screenshots/              # Phase-by-phase screenshot evidence
+├── Screenshots/              # Phase-by-phase screenshots
 │   ├── Phase1/
 │   ├── Phase2/
 │   ├── Phase3/
 │   ├── Phase4/
 │   └── Phase5/
-│   └── Phase6/
-└── Scripts/                  # PowerShell automation scripts
+└── Scripts/                  # PowerShell scripts I used
     ├── phase2_1-create-ous.ps1
     ├── phase2_2-create-groups.ps1
     ├── phase2_3-create-users.ps1
@@ -224,13 +183,12 @@ active-directory-homelab/
     └── phase4_4-apply-dl-to-ntfs.ps1
 ```
 
-## A Note on Tooling and AI Assistance
+## A note on AI assistance
 
-This lab was built with significant AI assistance for PowerShell scripting and architectural guidance. I designed the lab structure, made the design decisions (single-DC topology, AGDLP permissions model, OU layout, GPO scope choices), executed every step on the live system, and verified results at every stage. The PowerShell scripts in `/Scripts` reflect repeatable, idempotent patterns suitable for real infrastructure work — I can read them, explain them, and modify them, but I would not claim PowerShell expertise at this stage of my career.
+This lab was built with significant help from an AI assistant, especially for the PowerShell scripting and walking through unfamiliar parts of Group Policy and NTFS permissions. I made the decisions about how to set things up, ran every step on the live system, and verified the results. The PowerShell scripts in `/Scripts` I can read and explain at a basic level, but I wouldn't call myself a PowerShell expert — it's a tool I'm learning to use.
 
-The primary learning outcome was conceptual: Active Directory architecture, Group Policy mechanics, the AGDLP authorization model, and structured troubleshooting methodology. This project is a portfolio of demonstrable skills, not a claim of mastery.
+The main thing I wanted to get out of this project was hands-on practice with the tools and tasks a Tier 1 helpdesk tech actually does day-to-day: ADUC, Group Policy, basic permissions, and Windows troubleshooting. The point isn't to claim mastery — it's to show I've done the work, can explain what I did, and can use these tools when a ticket lands on my desk.
 
 ---
-   
-   *John Boehler — CompTIA A+ certified, transitioning into IT.*  
-   *[LinkedIn](https://www.linkedin.com/in/john-boehler-/) · [Email](mailto:johnsboehler@outlook.com)*
+
+*John Boehler — CompTIA A+ certified, looking for Tier 1 / helpdesk / desktop support roles.*
